@@ -7,6 +7,8 @@ import java.util.Map.Entry;
 
 import javax.jms.JMSException;
 
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -76,63 +78,48 @@ public class SQSClient {
 		// AmazonSQS sqs = getClientBuilder();
 		for (;;) {
 			ReceiveMessageRequest receiveMessageRequest = new ReceiveMessageRequest(sqsUrl);
+			long totalTime=0;
 			List<Message> messages = sqs.receiveMessage(receiveMessageRequest).getMessages();
 			for (Message message : messages) {
-				if (null == message) {
-					System.out.println(" Message");
-					System.out.println(" MessageId: " + message.getMessageId());
-					System.out.println(" ReceiptHandle: " + message.getReceiptHandle());
-					System.out.println(" MD5OfBody: " + message.getMD5OfBody());
-					System.out.println(" Body: " + message.getBody());
-					for (Entry<String, String> entry : message.getAttributes().entrySet()) {
-						System.out.println(" Attribute");
-						System.out.println(" Name: " + entry.getKey());
-						System.out.println(" Value: " + entry.getValue());
+				if (null != message) {
+					/*
+					 * System.out.println(" Message");
+					 * System.out.println(" MessageId: " +
+					 * message.getMessageId());
+					 * System.out.println(" ReceiptHandle: " +
+					 * message.getReceiptHandle());
+					 * System.out.println(" MD5OfBody: " +
+					 * message.getMD5OfBody()); System.out.println(" Body: " +
+					 * message.getBody());
+					 */
+					/*
+					 * for (Entry<String, String> entry :
+					 * message.getAttributes().entrySet()) {
+					 * System.out.println(" Attribute");
+					 * System.out.println(" Name: " + entry.getKey());
+					 * System.out.println(" Value: " + entry.getValue()); }
+					 */
+					String recevMsg = message.getBody();
+					try {
+						long currentTs = System.currentTimeMillis();
+						JSONObject json_msg = new JSONObject(recevMsg);
+						long sentTs = Long.valueOf(json_msg.getString("epoch"));
+						String msgId = json_msg.getString("msgId");
+						long timeDiff = currentTs - sentTs;
+						totalTime=totalTime+timeDiff;
+						System.out.println("MSG-ID:-" + msgId + " TimeDiff::" + timeDiff);
+						sqs.deleteMessage(sqsUrl, message.getReceiptHandle());
+					} catch (JSONException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
 					}
 				}
 			}
-			System.out.println();
+			long avgTime=totalTime/messages.size();
+			System.out.println("Avg time:- "+avgTime +" No. of msgs:-"+messages.size());
+			
+			totalTime=0;
 		}
-
-		// Create the connection.
-		// SQSConnection connection;
-		// try {
-		// connection = connectionFactory.createConnection();
-
-		// Get the wrapped client
-		// AmazonSQSMessagingClientWrapper client =
-		// connection.getWrappedAmazonSQSClient();
-
-		// Create an SQS queue named MyQueue, if it doesn't already exist
-		// if (!client.queueExists("demo-sqs")) {
-		// client.createQueue("demo-sqs");
-		// }
-
-		// Session session = connection.createSession(false,
-		// Session.AUTO_ACKNOWLEDGE);
-		// Queue queue = session.createQueue("demo-sqs");
-		// Create a consumer for the 'MyQueue'.
-		// MessageConsumer consumer =
-		// session.createConsumer(session.createQueue("demo-sqs"));
-
-		// Instantiate and set the message listener for the consumer.
-		// consumer.setMessageListener(new MyListener());
-
-		// Start receiving incoming messages.
-		// connection.start();
-
-		// Message receivedMessage = consumer.receive(1000);
-
-		// if (receivedMessage != null) {
-		// System.out.println("Received: " + ((TextMessage)
-		// receivedMessage).getText());
-		// }
-
-		// } catch (JMSException e) {
-		// // TODO Auto-generated catch block
-		// e.printStackTrace();
-		// }
-
 	}
 
 	public void createFIFOSQS(String queueName) {
@@ -152,6 +139,33 @@ public class SQSClient {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+	}
+
+	public void sendBulkMessages() {
+		String msg_template = "{\"msgId\":{MSG_ID},\"epoch\":{EPOCH}}";
+		for (int i = 0; i < 500; i++) {
+			String interim_msg = msg_template.replace("{MSG_ID}", String.valueOf(i));
+			String msg = interim_msg.replace("{EPOCH}", String.valueOf(System.currentTimeMillis()));
+			System.out.println("MSG:: " + msg);
+			
+			SendMessageRequest send_msg_request = new SendMessageRequest().withQueueUrl(sqsUrl).withMessageBody(msg);
+			// AmazonSQS sqs = getClientBuilder();
+			sqs.sendMessage(send_msg_request);
+
+			/*try {
+				long currentTs = System.currentTimeMillis();
+				JSONObject json_msg = new JSONObject(msg);
+				long sentTs = Long.valueOf(json_msg.getString("epoch"));
+				String msgId = json_msg.getString("msgId");
+				long timeDiff = currentTs - sentTs;
+				System.out.println("MSG-ID:-" + msgId + " TimeDiff::" + timeDiff);
+			} catch (JSONException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} */
+
+		}
+
 	}
 
 }

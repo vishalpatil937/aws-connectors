@@ -41,4 +41,9 @@ public class AWSController {
 //	@GetMapping("/saveEntity")
 //	public void saveEntity
 	
+	@GetMapping("/send/bulk")
+	public void sendBulkMessages(){
+		sqsClient.sendBulkMessages();
+	}
+	
 }
